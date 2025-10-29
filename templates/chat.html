@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Career Coach - Professional PDF Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .chat-bubble-user {
+      border-radius: 18px 18px 4px 18px;
+    }
+    .chat-bubble-agent {
+      border-radius: 18px 18px 18px 4px;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .typing-indicator span {
+      animation: typing 1.4s infinite;
+      animation-fill-mode: both;
+    }
+    .typing-indicator span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing-indicator span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 1; }
+      50% { transform: scale(1); opacity: 0.7; }
+      100% { transform: scale(0.95); opacity: 1; }
+    }
+    
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .slide-in {
+      animation: slideIn 0.4s ease-out;
+    }
+    
+    .slide-up {
+      animation: slideUp 0.4s ease-out;
+    }
+    
+    #pdf-viewer {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    .accept-btn {
+      transition: all 0.3s ease;
+    }
+    .accept-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+    }
+    
+    .pending-badge {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+    
+    .change-card {
+      transition: all 0.3s ease;
+    }
+    
+    .change-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    .modal-backdrop {
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .modal-content {
+      animation: slideUp 0.3s ease-out;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Main container -->
+  <div class="flex-1 flex h-full">
+    <!-- Left side: PDF Viewer -->
+    <div class="w-1/2 h-full bg-white border-r border-gray-200 flex flex-col relative shadow-xl">
+      <div class="bg-gradient-to-r from-green-600 via-green-600 to-emerald-600 text-white px-6 py-4 shadow-lg">
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <h2 class="text-xl font-bold flex items-center mb-1">
+              <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Original Resume
+            </h2>
+            <div class="flex items-center space-x-4">
+              <p class="text-sm opacity-90 flex items-center" id="file-name">
+                <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+                <span id="pending-status">No changes pending</span>
+              </p>
+              <div id="pending-badge" class="hidden bg-gradient-to-r from-yellow-400 to-amber-400 text-yellow-900 px-3 py-1 rounded-full font-bold text-sm pending-badge shadow-md">
+                <span id="pending-count">0</span> pending
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button id="view-changes-btn" class="hidden bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg transition flex items-center space-x-2 font-semibold" title="Review pending changes">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span>Review Changes</span>
+            </button>
+            <button id="export-btn" class="bg-white text-green-700 hover:bg-green-50 px-5 py-2 rounded-lg transition flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-md" disabled title="Export improved resume as PDF">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export PDF</span>
+            </button>
+            <button id="reset-btn" class="hidden bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg transition flex items-center space-x-2" title="Reset to original">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Reset</span>
+            </button>
+            <button id="upload-btn" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg transition flex items-center space-x-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>Upload New</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- PDF Display Area -->
+      <div id="resume-display" class="flex-1 overflow-hidden bg-gray-50">
+        <!-- Empty state -->
+        <div id="empty-state" class="h-full flex items-center justify-center p-8">
+          <div class="text-center max-w-lg">
+            <div class="w-32 h-32 bg-gradient-to-br from-green-100 to-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-8 pulse-ring shadow-xl">
+              <svg class="w-16 h-16 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <h3 class="text-3xl font-bold text-gray-900 mb-3">Upload Your Resume</h3>
+            <p class="text-gray-600 mb-8 text-lg">Upload your PDF resume and let AI improve it instantly</p>
+            <button onclick="document.getElementById('file-input').click()" class="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-10 py-4 rounded-xl hover:from-green-700 hover:to-emerald-700 transition font-bold shadow-xl text-lg transform hover:scale-105">
+              Choose PDF File
+            </button>
+            <div class="mt-8 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 shadow-md">
+              <p class="text-sm text-blue-900 font-bold mb-3 flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                How It Works
+              </p>
+              <ul class="text-sm text-blue-800 space-y-2 text-left max-w-md mx-auto">
+                <li class="flex items-start">
+                  <span class="text-blue-600 mr-2">①</span>
+                  <span>Accept AI suggestions to queue changes</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-blue-600 mr-2">②</span>
+                  <span>Review all changes in one place</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-blue-600 mr-2">③</span>
+                  <span>Export with all edits applied at once</span>
+                </li>
+                <li class="flex items-start">
+                  <span class="text-blue-600 mr-2">④</span>
+                  <span>Original formatting perfectly preserved!</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <!-- PDF Viewer (hidden initially) -->
+        <div id="pdf-container" class="hidden h-full">
+          <iframe id="pdf-viewer" src=""></iframe>
+        </div>
+      </div>
+      
+      <!-- File input (hidden) -->
+      <input type="file" id="file-input" accept=".pdf" class="hidden">
+    </div>
+    
+    <!-- Right side: Chat Interface -->
+    <div class="w-1/2 h-full flex flex-col bg-gradient-to-br from-white to-gray-50">
+      <!-- Chat header -->
+      <div class="bg-gradient-to-r from-green-600 via-green-600 to-emerald-600 text-white px-6 py-4 shadow-lg">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg">
+              <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-xl font-bold">AI Career Coach</h2>
+              <p class="text-sm opacity-90 flex items-center">
+                <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+                Smart batch editing mode
+              </p>
+            </div>
+          </div>
+          <button onclick="window.location.href='/'" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-2.5 rounded-xl transition" title="Back to Home">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Chat messages -->
+      <div id="chat-container" class="flex-1 p-6 overflow-y-auto scrollbar-hide">
+        <!-- Welcome message -->
+        <div class="flex justify-start mb-6 slide-in">
+          <div class="max-w-[85%]">
+            <div class="flex items-center mb-2 text-xs text-gray-500">
+              <div class="w-7 h-7 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mr-2">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <span class="font-semibold">AI Agent</span>
+              <span class="mx-1">•</span>
+              <span>Just now</span>
+            </div>
+            <div class="bg-white shadow-md p-5 chat-bubble-agent border border-gray-200 rounded-2xl">
+              <p class="text-gray-800 mb-4 font-medium">👋 Hello! I'm your AI Career Coach with professional batch editing!</p>
+              
+              <div class="mb-4 p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-300 shadow-sm">
+                <p class="text-sm font-bold text-green-900 mb-3 flex items-center">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  ✨ Professional Batch Editing
+                </p>
+                <ul class="text-xs text-green-800 space-y-1.5 ml-6">
+                  <li>• Accept suggestions to queue changes safely</li>
+                  <li>• Review all changes before applying</li>
+                  <li>• All edits applied at once on export</li>
+                  <li>• Perfect formatting preservation!</li>
+                </ul>
+              </div>
+              
+              <div class="mb-4 p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl border-2 border-blue-300 shadow-sm">
+                <p class="text-sm font-bold text-blue-900 mb-2">💬 Answer Questions</p>
+                <ul class="text-xs text-blue-800 space-y-1 ml-4">
+                  <li>• "What is my work experience?"</li>
+                  <li>• "Summarize my skills"</li>
+                </ul>
+              </div>
+              
+              <div class="p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border-2 border-purple-300 shadow-sm">
+                <p class="text-sm font-bold text-purple-900 mb-2">🔧 Improve Resume</p>
+                <ul class="text-xs text-purple-800 space-y-1 ml-4">
+                  <li>• "Fix all grammar errors"</li>
+                  <li>• "Improve language quality"</li>
+                  <li>• "Add metrics to achievements"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Chat input -->
+      <div class="border-t-2 border-gray-200 p-5 bg-white shadow-lg">
+        <form id="chat-form" class="flex items-center space-x-3">
+          <div class="flex-1 relative">
+            <input 
+              type="text" 
+              id="user-input"
+              placeholder="Ask questions or request improvements..." 
+              disabled
+              class="w-full px-6 py-4 border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 transition disabled:bg-gray-100 disabled:cursor-not-allowed text-base shadow-sm"
+            >
+            <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-medium">
+              Press Enter ⏎
+            </div>
+          </div>
+          <button 
+            type="submit" 
+            id="send-btn"
+            disabled
+            class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white p-4 rounded-2xl transition disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed shadow-lg transform hover:scale-105">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </form>
+        <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <div class="flex items-center space-x-4">
+            <span class="flex items-center">
+              <span class="text-lg mr-1">💡</span>
+              <span class="font-medium">Try: "Fix grammar" or "What are my skills?"</span>
+            </span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span>Powered by</span>
+            <span class="font-bold text-green-600">PyMuPDF + Cerebras AI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changes Review Modal -->
+  <div id="changes-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="modal-backdrop absolute inset-0 bg-black/50" onclick="closeChangesModal()"></div>
+    <div class="modal-content relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div class="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-6 flex items-center justify-between">
+        <div>
+          <h3 class="text-2xl font-bold flex items-center">
+            <svg class="w-7 h-7 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Review Pending Changes
+          </h3>
+          <p class="text-sm opacity-90 mt-1">Preview all edits before exporting</p>
+        </div>
+        <button onclick="closeChangesModal()" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-2 rounded-xl transition">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div id="changes-list" class="p-8 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <!-- Changes will be inserted here -->
+      </div>
+      
+      <div class="bg-gray-50 px-8 py-6 border-t-2 border-gray-200 flex items-center justify-between">
+        <p class="text-sm text-gray-600">
+          <span class="font-bold text-gray-900" id="modal-change-count">0</span> changes ready to apply
+        </p>
+        <div class="flex space-x-3">
+          <button onclick="closeChangesModal()" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold transition">
+            Close
+          </button>
+          <button onclick="exportFromModal()" class="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold transition shadow-lg flex items-center space-x-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Export with Changes</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentResumeText = '';
+    let isProcessing = false;
+    let currentSuggestions = {};
+    let pendingCount = 0;
+    let pendingChanges = [];  // Store accepted changes for preview
+
+    // Update pending count display
+    function updatePendingDisplay(count) {
+      pendingCount = count;
+      const badge = document.getElementById('pending-badge');
+      const countEl = document.getElementById('pending-count');
+      const statusEl = document.getElementById('pending-status');
+      const resetBtn = document.getElementById('reset-btn');
+      const viewBtn = document.getElementById('view-changes-btn');
+      
+      if (count > 0) {
+        badge.classList.remove('hidden');
+        countEl.textContent = count;
+        statusEl.textContent = `${count} change${count > 1 ? 's' : ''} pending`;
+        resetBtn.classList.remove('hidden');
+        viewBtn.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+        statusEl.textContent = 'No changes pending';
+        resetBtn.classList.add('hidden');
+        viewBtn.classList.add('hidden');
+      }
+    }
+
+    // Show changes modal
+    function showChangesModal() {
+      const modal = document.getElementById('changes-modal');
+      const changesList = document.getElementById('changes-list');
+      const modalCount = document.getElementById('modal-change-count');
+      
+      modalCount.textContent = pendingChanges.length;
+      
+      if (pendingChanges.length === 0) {
+        changesList.innerHTML = `
+          <div class="text-center py-12">
+            <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+            <p class="text-gray-600 font-medium">No pending changes</p>
+            <p class="text-gray-500 text-sm mt-2">Accept suggestions to see them here</p>
+          </div>
+        `;
+      } else {
+        changesList.innerHTML = pendingChanges.map((change, index) => `
+          <div class="change-card bg-white border-2 border-gray-200 rounded-2xl p-6 mb-4 shadow-md">
+            <div class="flex items-start justify-between mb-4">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl flex items-center justify-center font-bold text-green-700">
+                  ${index + 1}
+                </div>
+                <span class="text-xs font-bold bg-${change.type === 'Grammar' ? 'red' : change.type === 'Language' ? 'blue' : 'purple'}-100 text-${change.type === 'Grammar' ? 'red' : change.type === 'Language' ? 'blue' : 'purple'}-700 px-3 py-1 rounded-full">${change.type}</span>
+              </div>
+              <button onclick="removeChange(${index})" class="text-gray-400 hover:text-red-500 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+            <div class="space-y-3">
+              <div class="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                <p class="text-xs font-semibold text-red-600 mb-2 flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Original
+                </p>
+                <p class="text-sm text-gray-800 font-mono break-words">${escapeHtml(change.original)}</p>
+              </div>
+              <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                <p class="text-xs font-semibold text-green-600 mb-2 flex items-center">
+                  <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Improved
+                </p>
+                <p class="text-sm text-gray-900 font-semibold font-mono break-words">${escapeHtml(change.new)}</p>
+              </div>
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p class="text-xs text-blue-800 italic flex items-start">
+                  <svg class="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>${escapeHtml(change.reason)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+      
+      modal.classList.remove('hidden');
+    }
+
+    function closeChangesModal() {
+      document.getElementById('changes-modal').classList.add('hidden');
+    }
+
+    function removeChange(index) {
+      if (confirm('Remove this change from the queue?')) {
+        pendingChanges.splice(index, 1);
+        updatePendingDisplay(pendingChanges.length);
+        showChangesModal();  // Refresh modal
+        addMessage('agent', '🗑️ Change removed from queue.');
+      }
+    }
+
+    function exportFromModal() {
+      closeChangesModal();
+      document.getElementById('export-btn').click();
+    }
+
+    // View changes button click
+    document.getElementById('view-changes-btn').addEventListener('click', showChangesModal);
+
+    // File upload handling
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Show loading state
+      const emptyState = document.getElementById('empty-state');
+      emptyState.innerHTML = `
+        <div class="text-center">
+          <div class="w-20 h-20 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+          <p class="text-gray-800 font-bold text-xl mb-2">Analyzing your resume...</p>
+          <p class="text-gray-600">Preparing PDF viewer and AI analysis</p>
+        </div>
+      `;
+
+      try {
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentResumeText = data.resume_text;
+          
+          document.getElementById('empty-state').classList.add('hidden');
+          document.getElementById('pdf-container').classList.remove('hidden');
+          
+          loadPDF();
+          
+          document.getElementById('file-name').innerHTML = `
+            <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+            <span id="pending-status">No changes pending</span>
+          `;
+
+          document.getElementById('user-input').disabled = false;
+          document.getElementById('send-btn').disabled = false;
+          document.getElementById('export-btn').disabled = false;
+          
+          updatePendingDisplay(0);
+          pendingChanges = [];
+
+          setTimeout(() => {
+            addMessage('agent', `✅ Resume uploaded successfully! I've analyzed ${data.resume_text.split(' ').length} words. Your original PDF is preserved - all changes will be applied when you export!`);
+          }, 300);
+
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        emptyState.innerHTML = `
+          <div class="text-center">
+            <div class="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <p class="text-red-600 font-bold text-xl mb-2">Upload failed</p>
+            <p class="text-gray-600 mb-6">${error.message}</p>
+            <button onclick="document.getElementById('file-input').click()" class="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 transition font-semibold">
+              Try Again
+            </button>
+          </div>
+        `;
+      }
+    });
+
+    function loadPDF() {
+      const pdfViewer = document.getElementById('pdf-viewer');
+      pdfViewer.src = '/get_pdf?t=' + new Date().getTime();
+    }
+
+    document.getElementById('upload-btn').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', async () => {
+      if (!confirm('Reset all changes? This will discard all pending edits.')) return;
+      
+      try {
+        const response = await fetch('/reset', { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+          currentResumeText = data.resume_text;
+          pendingChanges = [];
+          updatePendingDisplay(0);
+          addMessage('agent', '🔄 Reset complete! All changes discarded. Starting fresh with original resume.');
+        }
+      } catch (error) {
+        console.error('Reset error:', error);
+        addMessage('agent', '❌ Failed to reset. Please try again.');
+      }
+    });
+
+    document.getElementById('export-btn').addEventListener('click', async () => {
+      if (!currentResumeText) return;
+      
+      const exportBtn = document.getElementById('export-btn');
+      const originalHTML = exportBtn.innerHTML;
+      
+      if (pendingCount > 0) {
+        exportBtn.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>Applying ${pendingCount} edit${pendingCount > 1 ? 's' : ''}...</span>
+          </div>
+        `;
+      } else {
+        exportBtn.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="w-5 h-5 border-2 border-green-700 border-t-transparent rounded-full animate-spin"></div>
+            <span>Exporting...</span>
+          </div>
+        `;
+      }
+      exportBtn.disabled = true;
+      
+      try {
+        const response = await fetch('/export', { method: 'POST' });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'improved_resume.pdf';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          if (pendingCount > 0) {
+            addMessage('agent', `✅ Success! Applied ${pendingCount} edit${pendingCount > 1 ? 's' : ''} and exported your improved resume! Check your downloads folder.`);
+            pendingChanges = [];
+            updatePendingDisplay(0);
+          } else {
+            addMessage('agent', '✅ Resume exported successfully!');
+          }
+        } else {
+          throw new Error('Export failed');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        addMessage('agent', '❌ Failed to export resume. Please try again.');
+      } finally {
+        exportBtn.innerHTML = originalHTML;
+        exportBtn.disabled = false;
+      }
+    });
+
+    document.getElementById('chat-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (isProcessing) return;
+
+      const input = document.getElementById('user-input');
+      const query = input.value.trim();
+      
+      if (!query) return;
+
+      addMessage('user', query);
+      input.value = '';
+
+      addTypingIndicator();
+      isProcessing = true;
+
+      try {
+        const response = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+        removeTypingIndicator();
+
+        if (data.error) {
+          addMessage('agent', `⚠️ ${data.error}`);
+          return;
+        }
+
+        const messageType = data.is_qa ? 'qa' : 'improvement';
+        addMessage('agent', data.response || 'Analysis complete!', messageType);
+
+        if (data.suggestions && data.suggestions.length > 0 && !data.is_qa) {
+          currentSuggestions = {};
+          data.suggestions.forEach(sug => {
+            if (sug.id) {
+              currentSuggestions[sug.id] = sug;
+            }
+          });
+          
+          setTimeout(() => {
+            showInlineSuggestions(data.suggestions);
+          }, 300);
+        } else if (!data.is_qa && (!data.suggestions || data.suggestions.length === 0)) {
+          setTimeout(() => {
+            addMessage('agent', '✅ Great! Your resume looks good. Try "check for grammar errors" or "improve weak verbs".');
+          }, 500);
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        removeTypingIndicator();
+        addMessage('agent', '❌ Connection error. Please check your internet and try again.');
+      } finally {
+        isProcessing = false;
+      }
+    });
+
+    function addMessage(sender, message, messageType = null) {
+      const chatContainer = document.getElementById('chat-container');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'} mb-6 slide-in`;
+
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+      let modeBadge = '';
+      if (sender === 'agent' && messageType) {
+        if (messageType === 'qa') {
+          modeBadge = '<span class="inline-block bg-blue-100 text-blue-700 text-xs px-3 py-1 rounded-full mr-2 font-semibold">💬 Q&A</span>';
+        } else if (messageType === 'improvement') {
+          modeBadge = '<span class="inline-block bg-green-100 text-green-700 text-xs px-3 py-1 rounded-full mr-2 font-semibold">✨ Improvement</span>';
+        }
+      }
+
+      messageDiv.innerHTML = `
+        <div class="max-w-[85%]">
+          <div class="flex items-center mb-2 text-xs text-gray-500 ${sender === 'user' ? 'justify-end' : ''}">
+            ${sender === 'agent' ? `
+              <div class="w-7 h-7 bg-gradient-to-br from-green-100 to-emerald-100 rounded-full flex items-center justify-center mr-2">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+            ` : ''}
+            <span class="font-semibold">${sender === 'user' ? 'You' : 'AI Agent'}</span>
+            <span class="mx-1">•</span>
+            <span>${time}</span>
+          </div>
+          <div class="${sender === 'user' ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' : 'bg-white border-2 border-gray-200'} shadow-md p-5 ${sender === 'user' ? 'chat-bubble-user' : 'chat-bubble-agent'} rounded-2xl">
+            ${sender === 'agent' ? modeBadge : ''}
+            <p class="${sender === 'user' ? 'text-white' : 'text-gray-800'}">${message}</p>
+          </div>
+        </div>
+      `;
+
+      chatContainer.appendChild(messageDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function addTypingIndicator() {
+      const chatContainer = document.getElementById('chat-container');
+      const typingDiv = document.createElement('div');
+      typingDiv.id = 'typing-indicator';
+      typingDiv.className = 'flex justify-start mb-6';
+      typingDiv.innerHTML = `
+        <div class="max-w-[85%]">
+          <div class="bg-white shadow-md p-5 chat-bubble-agent border-2 border-gray-200 rounded-2xl">
+            <div class="typing-indicator flex space-x-2">
+              <span class="w-2.5 h-2.5 bg-gray-400 rounded-full"></span>
+              <span class="w-2.5 h-2.5 bg-gray-400 rounded-full"></span>
+              <span class="w-2.5 h-2.5 bg-gray-400 rounded-full"></span>
+            </div>
+          </div>
+        </div>
+      `;
+      chatContainer.appendChild(typingDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+      const indicator = document.getElementById('typing-indicator');
+      if (indicator) indicator.remove();
+    }
+
+    function showInlineSuggestions(suggestions) {
+      const chatContainer = document.getElementById('chat-container');
+      const suggestionsDiv = document.createElement('div');
+      suggestionsDiv.className = 'flex justify-start mb-6 slide-in';
+
+      let suggestionsHTML = `
+        <div class="max-w-[90%]">
+          <div class="bg-white shadow-lg p-6 chat-bubble-agent border-2 border-gray-200 rounded-2xl">
+            <p class="text-base font-bold text-gray-900 mb-4 flex items-center">
+              <svg class="w-6 h-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Found ${suggestions.length} improvement${suggestions.length > 1 ? 's' : ''}!
+            </p>
+            <div class="space-y-4">
+      `;
+
+      suggestions.forEach((sug, index) => {
+        const colorClass = sug.type === 'Grammar' ? 'red' : sug.type === 'Language' ? 'blue' : 'purple';
+        suggestionsHTML += `
+          <div class="bg-gradient-to-br from-${colorClass}-50 to-orange-50 border-2 border-${colorClass}-200 rounded-xl p-4 hover:shadow-lg transition">
+            <div class="flex items-start justify-between mb-3">
+              <span class="text-xs font-bold bg-${colorClass}-100 text-${colorClass}-700 px-3 py-1.5 rounded-full">${sug.type}</span>
+              <button 
+                onclick="applySuggestion('${sug.id}')" 
+                class="accept-btn text-sm bg-gradient-to-r from-green-600 to-emerald-600 text-white px-5 py-2 rounded-full hover:from-green-700 hover:to-emerald-700 transition font-bold shadow-md flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Accept</span>
+              </button>
+            </div>
+            <div class="space-y-3">
+              <div class="bg-white border-2 border-red-300 rounded-lg p-3">
+                <p class="text-xs font-semibold text-red-600 mb-2">❌ Original:</p>
+                <p class="text-sm text-gray-800 font-mono break-words">${escapeHtml(sug.original)}</p>
+              </div>
+              <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3">
+                <p class="text-xs font-semibold text-green-600 mb-2">✅ Suggested:</p>
+                <p class="text-sm text-gray-900 font-bold font-mono break-words">${escapeHtml(sug.suggested)}</p>
+              </div>
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+                <p class="text-xs text-blue-800 italic flex items-start">
+                  <svg class="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>${escapeHtml(sug.reason)}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      suggestionsHTML += `
+            </div>
+            <div class="mt-5 p-4 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-xl">
+              <p class="text-sm text-yellow-900 flex items-center font-semibold">
+                <svg class="w-5 h-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                Accept suggestions to queue them. Click "Review Changes" to preview all edits before exporting!
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      suggestionsDiv.innerHTML = suggestionsHTML;
+      chatContainer.appendChild(suggestionsDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    async function applySuggestion(suggestionId) {
+      if (!currentSuggestions[suggestionId]) {
+        addMessage('agent', '❌ Suggestion not found.');
+        return;
+      }
+
+      const suggestion = currentSuggestions[suggestionId];
+      
+      addMessage('agent', `✅ Accepted: "${suggestion.original.substring(0, 40)}..." → "${suggestion.suggested.substring(0, 40)}..."`);
+
+      try {
+        const response = await fetch('/apply_suggestion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ suggestion_id: suggestionId })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentResumeText = data.updated_text;
+          
+          // Add to pending changes for preview
+          pendingChanges.push({
+            original: suggestion.original,
+            new: suggestion.suggested,
+            reason: suggestion.reason,
+            type: suggestion.type
+          });
+          
+          updatePendingDisplay(data.pending_count || 0);
+          delete currentSuggestions[suggestionId];
+          
+          setTimeout(() => {
+            addMessage('agent', `📋 Change queued! ${data.pending_count} change${data.pending_count > 1 ? 's' : ''} ready. Click "Review Changes" to preview or "Export PDF" to apply all.`);
+          }, 300);
+        } else {
+          addMessage('agent', '❌ Failed to accept: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        addMessage('agent', '❌ Error accepting suggestion. Please try again.');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    window.applySuggestion = applySuggestion;
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Career Coach - Batch PDF Editing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .chat-bubble-user {
+      border-radius: 18px 18px 4px 18px;
+    }
+    .chat-bubble-agent {
+      border-radius: 18px 18px 18px 4px;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .typing-indicator span {
+      animation: typing 1.4s infinite;
+      animation-fill-mode: both;
+    }
+    .typing-indicator span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing-indicator span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 1; }
+      50% { transform: scale(1); opacity: 0.7; }
+      100% { transform: scale(0.95); opacity: 1; }
+    }
+    
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    
+    .slide-in {
+      animation: slideIn 0.4s ease-out;
+    }
+    
+    #pdf-viewer {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    .accept-btn {
+      transition: all 0.3s ease;
+    }
+    .accept-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+    }
+    
+    .pending-badge {
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
+  <!-- Main container -->
+  <div class="flex-1 flex h-full">
+    <!-- Left side: PDF Viewer -->
+    <div class="w-1/2 h-full bg-white border-r border-gray-200 flex flex-col relative">
+      <div class="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-semibold flex items-center">
+            <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Original Resume (PDF)
+          </h2>
+          <p class="text-sm opacity-80 flex items-center" id="file-name">
+            <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+            <span id="pending-status">No changes pending</span>
+          </p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <div id="pending-badge" class="hidden bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg font-bold pending-badge">
+            <span id="pending-count">0</span> changes pending
+          </div>
+          <button id="export-btn" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled title="Export improved resume as PDF">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Export PDF</span>
+          </button>
+          <button id="reset-btn" class="hidden bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition flex items-center space-x-2" title="Reset to original">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Reset</span>
+          </button>
+          <button id="upload-btn" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition flex items-center space-x-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span>Upload</span>
+          </button>
+        </div>
+      </div>
+      
+      <!-- PDF Display Area -->
+      <div id="resume-display" class="flex-1 overflow-hidden">
+        <!-- Empty state -->
+        <div id="empty-state" class="h-full flex items-center justify-center p-6">
+          <div class="text-center max-w-md">
+            <div class="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 pulse-ring">
+              <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Upload Your Resume</h3>
+            <p class="text-gray-600 mb-6">Upload your PDF resume to start improving it</p>
+            <button onclick="document.getElementById('file-input').click()" class="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 transition font-semibold shadow-lg">
+              Choose PDF File
+            </button>
+            <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p class="text-sm text-blue-800 font-semibold mb-2">✨ How it works:</p>
+              <ul class="text-xs text-blue-700 space-y-1 text-left">
+                <li>• Accept suggestions to queue changes</li>
+                <li>• All edits applied at once when you export</li>
+                <li>• Original PDF stays unchanged until export</li>
+                <li>• No corruption from multiple edits!</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <!-- PDF Viewer (hidden initially) -->
+        <div id="pdf-container" class="hidden h-full">
+          <iframe id="pdf-viewer" src=""></iframe>
+        </div>
+      </div>
+      
+      <!-- File input (hidden) -->
+      <input type="file" id="file-input" accept=".pdf" class="hidden">
+    </div>
+    
+    <!-- Right side: Chat Interface -->
+    <div class="w-1/2 h-full flex flex-col bg-white">
+      <!-- Chat header -->
+      <div class="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+          <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-xl font-semibold">AI Career Coach</h2>
+            <p class="text-sm opacity-80 flex items-center">
+              <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+              Batch editing mode
+            </p>
+          </div>
+        </div>
+        <button onclick="window.location.href='/'" class="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition" title="Back to Home">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Chat messages -->
+      <div id="chat-container" class="flex-1 p-6 overflow-y-auto scrollbar-hide bg-gray-50">
+        <!-- Welcome message -->
+        <div class="flex justify-start mb-6">
+          <div class="max-w-[85%]">
+            <div class="flex items-center mb-2 text-xs text-gray-500">
+              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mr-2">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <span class="font-medium">AI Agent</span>
+              <span class="mx-1">•</span>
+              <span>Just now</span>
+            </div>
+            <div class="bg-white shadow-sm p-4 chat-bubble-agent border border-gray-200">
+              <p class="text-gray-800 mb-3">👋 Hello! I'm your AI Career Coach with batch PDF editing!</p>
+              
+              <div class="mb-3 p-3 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                <p class="text-sm font-bold text-green-800 mb-2 flex items-center">
+                  <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  ✨ NEW: Batch Editing (No Corruption!)
+                </p>
+                <ul class="text-xs text-green-700 space-y-1 ml-6">
+                  <li>• Accept suggestions to queue changes</li>
+                  <li>• All edits applied at once on export</li>
+                  <li>• Original PDF preserved until final export</li>
+                  <li>• 100% reliable - no incremental corruption!</li>
+                </ul>
+              </div>
+              
+              <div class="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p class="text-sm font-semibold text-blue-800 mb-2">💬 Answer Questions</p>
+                <ul class="text-xs text-blue-700 space-y-1 ml-4">
+                  <li>• "What is my work experience?"</li>
+                  <li>• "Summarize my skills"</li>
+                  <li>• "Tell me about my achievements"</li>
+                </ul>
+              </div>
+              
+              <div class="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                <p class="text-sm font-semibold text-purple-800 mb-2">🔧 Improve Your Resume</p>
+                <ul class="text-xs text-purple-700 space-y-1 ml-4">
+                  <li>• "Fix all grammar errors"</li>
+                  <li>• "Improve language quality"</li>
+                  <li>• "Add metrics to achievements"</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Chat input -->
+      <div class="border-t border-gray-200 p-4 bg-white">
+        <form id="chat-form" class="flex items-center space-x-3">
+          <div class="flex-1 relative">
+            <input 
+              type="text" 
+              id="user-input"
+              placeholder="Ask questions or request improvements..." 
+              disabled
+              class="w-full px-5 py-3 border-2 border-gray-200 rounded-full focus:outline-none focus:border-green-500 transition disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+              Press Enter
+            </div>
+          </div>
+          <button 
+            type="submit" 
+            id="send-btn"
+            disabled
+            class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-full transition disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </form>
+        <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <div class="flex items-center space-x-4">
+            <span>💡 Try: "Fix grammar" or "What are my skills?"</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span>Powered by</span>
+            <span class="font-semibold text-green-600">PyMuPDF + Cerebras AI</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentResumeText = '';
+    let isProcessing = false;
+    let currentSuggestions = {};
+    let pendingCount = 0;
+
+    // Update pending count display
+    function updatePendingDisplay(count) {
+      pendingCount = count;
+      const badge = document.getElementById('pending-badge');
+      const countEl = document.getElementById('pending-count');
+      const statusEl = document.getElementById('pending-status');
+      const resetBtn = document.getElementById('reset-btn');
+      
+      if (count > 0) {
+        badge.classList.remove('hidden');
+        countEl.textContent = count;
+        statusEl.textContent = `${count} change${count > 1 ? 's' : ''} pending`;
+        resetBtn.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+        statusEl.textContent = 'No changes pending';
+        resetBtn.classList.add('hidden');
+      }
+    }
+
+    // File upload handling
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Show loading state
+      const emptyState = document.getElementById('empty-state');
+      emptyState.innerHTML = `
+        <div class="text-center">
+          <div class="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p class="text-gray-700 font-semibold">Analyzing your resume...</p>
+          <p class="text-gray-500 text-sm mt-2">Preparing PDF viewer and AI analysis</p>
+        </div>
+      `;
+
+      try {
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentResumeText = data.resume_text;
+          
+          // Hide empty state
+          document.getElementById('empty-state').classList.add('hidden');
+          
+          // Show PDF viewer
+          const pdfContainer = document.getElementById('pdf-container');
+          pdfContainer.classList.remove('hidden');
+          
+          // Load PDF
+          loadPDF();
+          
+          // Update filename
+          document.getElementById('file-name').innerHTML = `
+            <span class="w-2 h-2 bg-green-300 rounded-full mr-2 animate-pulse"></span>
+            <span id="pending-status">No changes pending</span>
+          `;
+
+          // Enable chat input and export
+          document.getElementById('user-input').disabled = false;
+          document.getElementById('send-btn').disabled = false;
+          document.getElementById('export-btn').disabled = false;
+          
+          // Reset pending count
+          updatePendingDisplay(0);
+
+          // Add success message
+          setTimeout(() => {
+            addMessage('agent', `✅ Resume uploaded! I've analyzed ${data.resume_text.split(' ').length} words. Your original PDF is preserved - all changes will be applied when you export!`);
+          }, 300);
+
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        emptyState.innerHTML = `
+          <div class="text-center">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <p class="text-red-600 font-semibold mb-2">Upload failed</p>
+            <p class="text-gray-600 text-sm mb-4">${error.message}</p>
+            <button onclick="document.getElementById('file-input').click()" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition">
+              Try Again
+            </button>
+          </div>
+        `;
+      }
+    });
+
+    // Load PDF function
+    function loadPDF() {
+      const pdfViewer = document.getElementById('pdf-viewer');
+      pdfViewer.src = '/get_pdf?t=' + new Date().getTime();
+    }
+
+    // Upload button click
+    document.getElementById('upload-btn').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    // Reset button click
+    document.getElementById('reset-btn').addEventListener('click', async () => {
+      if (!confirm('Reset all changes? This will discard all pending edits.')) return;
+      
+      try {
+        const response = await fetch('/reset', { method: 'POST' });
+        const data = await response.json();
+        
+        if (data.success) {
+          currentResumeText = data.resume_text;
+          updatePendingDisplay(0);
+          addMessage('agent', '🔄 Reset complete! All changes discarded. Starting fresh with original resume.');
+        }
+      } catch (error) {
+        console.error('Reset error:', error);
+        addMessage('agent', '❌ Failed to reset. Please try again.');
+      }
+    });
+
+    // Export button click
+    document.getElementById('export-btn').addEventListener('click', async () => {
+      if (!currentResumeText) return;
+      
+      const exportBtn = document.getElementById('export-btn');
+      const originalHTML = exportBtn.innerHTML;
+      
+      if (pendingCount > 0) {
+        exportBtn.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>Applying ${pendingCount} edit${pendingCount > 1 ? 's' : ''}...</span>
+          </div>
+        `;
+      } else {
+        exportBtn.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>Exporting...</span>
+          </div>
+        `;
+      }
+      exportBtn.disabled = true;
+      
+      try {
+        const response = await fetch('/export', {
+          method: 'POST'
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'improved_resume.pdf';
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          if (pendingCount > 0) {
+            addMessage('agent', `✅ Success! Applied ${pendingCount} edit${pendingCount > 1 ? 's' : ''} and exported your improved resume!`);
+          } else {
+            addMessage('agent', '✅ Resume exported successfully!');
+          }
+        } else {
+          throw new Error('Export failed');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        addMessage('agent', '❌ Failed to export resume. Please try again.');
+      } finally {
+        exportBtn.innerHTML = originalHTML;
+        exportBtn.disabled = false;
+      }
+    });
+
+    // Chat form submission
+    document.getElementById('chat-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (isProcessing) return;
+
+      const input = document.getElementById('user-input');
+      const query = input.value.trim();
+      
+      if (!query) return;
+
+      // Add user message
+      addMessage('user', query);
+      input.value = '';
+
+      // Show typing indicator
+      addTypingIndicator();
+      isProcessing = true;
+
+      try {
+        const response = await fetch('/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+
+        // Remove typing indicator
+        removeTypingIndicator();
+
+        // Check for errors
+        if (data.error) {
+          addMessage('agent', `⚠️ ${data.error}`);
+          return;
+        }
+
+        // Determine message type
+        const messageType = data.is_qa ? 'qa' : 'improvement';
+
+        // Add agent response
+        addMessage('agent', data.response || 'Analysis complete!', messageType);
+
+        // Show suggestions if available
+        if (data.suggestions && data.suggestions.length > 0 && !data.is_qa) {
+          currentSuggestions = {};
+          data.suggestions.forEach(sug => {
+            if (sug.id) {
+              currentSuggestions[sug.id] = sug;
+            }
+          });
+          
+          setTimeout(() => {
+            showInlineSuggestions(data.suggestions);
+          }, 300);
+        } else if (!data.is_qa && (!data.suggestions || data.suggestions.length === 0)) {
+          setTimeout(() => {
+            addMessage('agent', '✅ Great! Your resume looks good, or I couldn\'t find specific issues. Try "check for grammar errors" or "improve weak verbs".');
+          }, 500);
+        }
+
+      } catch (error) {
+        console.error('Error:', error);
+        removeTypingIndicator();
+        addMessage('agent', '❌ Connection error. Please check your internet and try again.');
+      } finally {
+        isProcessing = false;
+      }
+    });
+
+    function addMessage(sender, message, messageType = null) {
+      const chatContainer = document.getElementById('chat-container');
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'} mb-6 slide-in`;
+
+      const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+      // Add mode badge
+      let modeBadge = '';
+      if (sender === 'agent' && messageType) {
+        if (messageType === 'qa') {
+          modeBadge = '<span class="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full mr-2">💬 Q&A Mode</span>';
+        } else if (messageType === 'improvement') {
+          modeBadge = '<span class="inline-block bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full mr-2">✨ Improvement Mode</span>';
+        }
+      }
+
+      messageDiv.innerHTML = `
+        <div class="max-w-[85%]">
+          <div class="flex items-center mb-2 text-xs text-gray-500 ${sender === 'user' ? 'justify-end' : ''}">
+            ${sender === 'agent' ? `
+              <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mr-2">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+            ` : ''}
+            <span class="font-medium">${sender === 'user' ? 'You' : 'AI Agent'}</span>
+            <span class="mx-1">•</span>
+            <span>${time}</span>
+          </div>
+          <div class="${sender === 'user' ? 'bg-green-600 text-white' : 'bg-white border border-gray-200'} shadow-sm p-4 ${sender === 'user' ? 'chat-bubble-user' : 'chat-bubble-agent'}">
+            ${sender === 'agent' ? modeBadge : ''}
+            <p class="${sender === 'user' ? 'text-white' : 'text-gray-800'}">${message}</p>
+          </div>
+        </div>
+      `;
+
+      chatContainer.appendChild(messageDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function addTypingIndicator() {
+      const chatContainer = document.getElementById('chat-container');
+      const typingDiv = document.createElement('div');
+      typingDiv.id = 'typing-indicator';
+      typingDiv.className = 'flex justify-start mb-6';
+      typingDiv.innerHTML = `
+        <div class="max-w-[85%]">
+          <div class="bg-white shadow-sm p-4 chat-bubble-agent border border-gray-200">
+            <div class="typing-indicator flex space-x-1">
+              <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+              <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+              <span class="w-2 h-2 bg-gray-400 rounded-full"></span>
+            </div>
+          </div>
+        </div>
+      `;
+      chatContainer.appendChild(typingDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+      const indicator = document.getElementById('typing-indicator');
+      if (indicator) indicator.remove();
+    }
+
+    function showInlineSuggestions(suggestions) {
+      const chatContainer = document.getElementById('chat-container');
+      const suggestionsDiv = document.createElement('div');
+      suggestionsDiv.className = 'flex justify-start mb-6 slide-in';
+
+      let suggestionsHTML = `
+        <div class="max-w-[85%]">
+          <div class="bg-white shadow-sm p-4 chat-bubble-agent border border-gray-200">
+            <p class="text-sm font-semibold text-gray-800 mb-3 flex items-center">
+              <svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Found ${suggestions.length} improvement${suggestions.length > 1 ? 's' : ''}! 
+              <span class="text-xs font-normal text-gray-600 ml-2">Accept to queue for export:</span>
+            </p>
+            <div class="space-y-3">
+      `;
+
+      suggestions.forEach((sug, index) => {
+        suggestionsHTML += `
+          <div class="bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-lg p-3 hover:shadow-md transition">
+            <div class="flex items-start justify-between mb-2">
+              <span class="text-xs font-semibold text-red-600 bg-red-100 px-2 py-1 rounded">${sug.type}</span>
+              <button 
+                onclick="applySuggestion('${sug.id}')" 
+                class="accept-btn text-xs bg-green-600 text-white px-4 py-1 rounded-full hover:bg-green-700 transition font-semibold shadow-sm flex items-center space-x-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Accept</span>
+              </button>
+            </div>
+            <div class="space-y-2">
+              <div>
+                <p class="text-xs text-gray-500 mb-1">❌ Original:</p>
+                <p class="text-sm text-gray-800 bg-white p-2 rounded border border-red-300 font-mono">${escapeHtml(sug.original)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 mb-1">✅ Suggested:</p>
+                <p class="text-sm text-gray-900 bg-green-50 p-2 rounded border border-green-300 font-semibold font-mono">${escapeHtml(sug.suggested)}</p>
+              </div>
+              <p class="text-xs text-gray-600 italic mt-2">💡 ${escapeHtml(sug.reason)}</p>
+            </div>
+          </div>
+        `;
+      });
+
+      suggestionsHTML += `
+            </div>
+            <div class="mt-4 p-3 bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg">
+              <p class="text-xs text-yellow-900 flex items-center">
+                <svg class="w-4 h-4 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                <strong>Batch Mode:</strong> Accept suggestions to queue them. All changes will be applied to your PDF when you click "Export PDF"!
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      suggestionsDiv.innerHTML = suggestionsHTML;
+      chatContainer.appendChild(suggestionsDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    async function applySuggestion(suggestionId) {
+      if (!currentSuggestions[suggestionId]) {
+        addMessage('agent', '❌ Suggestion not found.');
+        return;
+      }
+
+      const suggestion = currentSuggestions[suggestionId];
+      
+      // Show accepting message
+      addMessage('agent', `✅ Accepted: "${suggestion.original.substring(0, 50)}..." → "${suggestion.suggested.substring(0, 50)}..."`);
+
+      try {
+        const response = await fetch('/apply_suggestion', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ suggestion_id: suggestionId })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          currentResumeText = data.updated_text;
+          
+          // Update pending count
+          updatePendingDisplay(data.pending_count || 0);
+          
+          // Remove from current suggestions
+          delete currentSuggestions[suggestionId];
+          
+          setTimeout(() => {
+            addMessage('agent', `📋 ${data.message || 'Change queued! Click "Export PDF" to apply all changes.'}`);
+          }, 300);
+        } else {
+          addMessage('agent', '❌ Failed to accept: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        addMessage('agent', '❌ Error accepting suggestion. Please try again.');
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Make applySuggestion available globally
+    window.applySuggestion = applySuggestion;
+  </script>
+</body>
+</html>

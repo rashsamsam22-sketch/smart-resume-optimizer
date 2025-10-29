@@ -1,0 +1,153 @@
+# ============================================================================
+# Environment Variables & API Keys
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.env
+.env.example.filled
+
+# ============================================================================
+# Python
+# ============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.virtualenv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================================================
+# Flask Specific
+# ============================================================================
+instance/
+.webassets-cache
+
+# ============================================================================
+# Uploaded Files & Generated Content
+# ============================================================================
+uploads/*.pdf
+uploads/*.txt
+uploads/*.docx
+uploads/updated_resume.*
+uploads/improved_resume.*
+
+# Keep the uploads directory but not its contents
+!uploads/.gitkeep
+
+# ============================================================================
+# Vector Store & AI Models
+# ============================================================================
+vector_index/
+*.index
+*.pkl
+faiss_index/
+embeddings_cache/
+
+# ============================================================================
+# Logs
+# ============================================================================
+*.log
+logs/
+*.log.*
+
+# ============================================================================
+# OS Generated Files
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================================================
+# Temporary Files
+# ============================================================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# ============================================================================
+# Database
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================================
+# Secrets & Credentials
+# ============================================================================
+secrets.json
+credentials.json
+service-account.json
+*.pem
+*.key
+*.crt
+
+# ============================================================================
+# Node (if you add any frontend tooling)
+# ============================================================================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
