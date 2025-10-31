@@ -29,7 +29,7 @@ from PIL import Image
 import copy
 
 load_dotenv()
-
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 # ============================================================================
 # AGENTIC AI SETUP
 # ============================================================================
@@ -44,7 +44,7 @@ text_splitter = CharacterTextSplitter(
 embeddings = HuggingFaceEmbeddings()
 
 llm = ChatCerebras(
-    api_key=os.getenv("CERABRAS_API_KEY"),
+    api_key= CEREBRAS_API_KEY,
     model="llama3.1-8b",
     temperature=0.3,
     max_tokens=2000
@@ -960,10 +960,12 @@ def get_pending_edits():
 
 if __name__ == "__main__":
     print("=" * 80)
-    print("🚀 AI Career Coach with Batch PDF Editing")
+    print("AI Career Coach with Batch PDF Editing")
     print("=" * 80)
-    print("🏠 Landing Page: http://localhost:5000/")
-    print("💬 Chat Interface: http://localhost:5000/chat")
-    print("📝 Method: Queue edits → Apply all at export")
+    print("Landing Page: http://localhost:5000/")
+    print("Chat Interface: http://localhost:5000/chat")
     print("=" * 80)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    
+    # Use Waitress for production
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
