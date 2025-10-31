@@ -12,7 +12,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_cerebras import ChatCerebras
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -24,6 +23,7 @@ import re
 
 load_dotenv()
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
+
 # ============================================================================
 # AGENTIC AI SETUP
 # ============================================================================
@@ -35,33 +35,37 @@ text_splitter = CharacterTextSplitter(
     length_function=len,
 )
 
-embeddings = HuggingFaceEmbeddings()
-
-llm = ChatCerebras(
-    api_key= CEREBRAS_API_KEY,
-    model="llama3.1-8b",
-    temperature=0.3,
-    max_tokens=2000
-)
-
-# Lazy load embeddings to save memory
+# LAZY LOAD EMBEDDINGS - Only load when needed
 embeddings = None
 
 def get_embeddings():
+    """Lazy load embeddings to save memory on startup"""
     global embeddings
     if embeddings is None:
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'}
+        print("📦 Loading embeddings model (first time only)...")
+        from sentence_transformers import SentenceTransformer
+        # Use lightweight model: 22MB instead of 100MB+
+        embeddings = SentenceTransformer(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            device="cpu"
         )
+        print("✅ Embeddings loaded")
     return embeddings
 
-print("Testing LLM connection...")
+# Initialize LLM with optimized settings
+llm = ChatCerebras(
+    api_key=CEREBRAS_API_KEY,
+    model="llama3.1-8b",
+    temperature=0.3,
+    max_tokens=800  # Reduced from 2000 to save memory
+)
+
+print("🔍 Testing LLM connection...")
 try:
     test_response = llm.invoke("Hello, world!")
-    print(f"LLM Test successful: {test_response.content[:50]}...")
+    print(f"✅ LLM Test successful: {test_response.content[:50]}...")
 except Exception as e:
-    print(f"LLM Test failed: {e}")
+    print(f"❌ LLM Test failed: {e}")
 
 # Flask app setup
 app = Flask(__name__)
@@ -86,14 +90,9 @@ pending_edits = []  # Queue of edits to apply on export
 # PDF EDITING - BATCH APPROACH
 # ============================================================================
 
-# ============================================================================
-# PDF EDITING - HYBRID APPROACH (Better Font Preservation)
-# ============================================================================
-
 def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
     """
-    NEW APPROACH: Extract exact font properties and recreate text with identical formatting.
-    This uses character-level analysis for maximum accuracy.
+    Apply edits to PDF using redaction method for font preservation
     """
     try:
         fitz.TOOLS.set_small_glyph_heights(True)
@@ -118,12 +117,10 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                     for inst in text_instances:
                         rect = fitz.Rect(inst)
                         
-                        # METHOD 1: Extract character-level formatting
+                        # Extract font properties
                         try:
-                            # Get text with detailed character information
                             blocks = page.get_text("dict", clip=rect)["blocks"]
                             
-                            # Collect all formatting data
                             all_fonts = []
                             all_sizes = []
                             all_colors = []
@@ -132,7 +129,6 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                                 if block.get("type") == 0:  # text block
                                     for line in block.get("lines", []):
                                         for span in line.get("spans", []):
-                                            # Collect every piece of font data
                                             font = span.get("font", "Helvetica")
                                             size = span.get("size", 0)
                                             color = span.get("color", 0)
@@ -142,20 +138,14 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                                                 all_sizes.append(size)
                                                 all_colors.append(color)
                             
-                            # Use the most common/largest size
+                            # Use maximum size (most prominent)
                             if all_sizes:
-                                # Use maximum size (most prominent)
                                 font_size = max(all_sizes)
-                                avg_size = sum(all_sizes) / len(all_sizes)
-                                
-                                print(f"\n📊 Font Analysis:")
-                                print(f"   All sizes found: {all_sizes}")
-                                print(f"   Average: {avg_size:.1f}, Max: {font_size:.1f}")
-                                print(f"   Using: {font_size:.1f}")
+                                print(f"📊 Font Analysis: sizes={all_sizes}, using {font_size:.1f}")
                             else:
-                                # METHOD 2: Calculate from rectangle dimensions
-                                font_size = rect.height * 0.8  # 80% of height is typical
-                                print(f"\n⚠️  No font data, estimating: {font_size:.1f} from rect height {rect.height:.1f}")
+                                # Estimate from rectangle height
+                                font_size = rect.height * 0.8
+                                print(f"⚠️  Estimating font: {font_size:.1f} from height {rect.height:.1f}")
                             
                             # Get text color
                             if all_colors:
@@ -184,28 +174,24 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                         
                         # Smart expansion with minimal font change
                         expanded_rect = rect
-                        if len_ratio > 1.1:  # More than 10% longer
-                            # Expand rectangle to accommodate longer text
+                        if len_ratio > 1.1:
                             extra_width = rect.width * (len_ratio - 1) * 0.6
-                            
-                            # Check if we have space to the right
                             page_width = page.rect.width
-                            if rect.x1 + extra_width < page_width - 20:  # 20pt margin
+                            
+                            if rect.x1 + extra_width < page_width - 20:
                                 expanded_rect = fitz.Rect(
                                     rect.x0,
                                     rect.y0,
                                     rect.x1 + extra_width,
                                     rect.y1
                                 )
-                                # Keep font size EXACTLY the same
                                 print(f"   ✓ Expanded rect by {extra_width:.1f}pt, keeping font at {font_size:.1f}")
                             else:
-                                # Not enough space, need to reduce font slightly
-                                reduction = min(0.95, 1.0 / (len_ratio ** 0.3))  # Gentle reduction
+                                # Gentle font reduction
+                                reduction = min(0.95, 1.0 / (len_ratio ** 0.3))
                                 font_size = font_size * reduction
                                 print(f"   ⚠️  Limited space, reducing font to {font_size:.1f}")
                         
-                        # Round to 1 decimal
                         font_size = round(font_size, 1)
                         
                         print(f"\n{'='*70}")
@@ -214,14 +200,13 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                         print(f"   New:      '{new_text}'")
                         print(f"   Length:   {len(original_text)} → {len(new_text)} (ratio: {len_ratio:.2f})")
                         print(f"   Font:     {original_font_size:.1f} → {font_size:.1f}")
-                        print(f"   Rect:     {rect.width:.1f}×{rect.height:.1f} → {expanded_rect.width:.1f}×{expanded_rect.height:.1f}")
                         print(f"{'='*70}\n")
                         
-                        # Apply redaction with maximum formatting accuracy
+                        # Apply redaction
                         page.add_redact_annot(
                             expanded_rect,
                             text=new_text,
-                            fontname="helv",  # Use standard Helvetica for consistency
+                            fontname="helv",
                             fontsize=font_size,
                             text_color=text_color,
                             align=fitz.TEXT_ALIGN_LEFT,
@@ -242,14 +227,14 @@ def apply_batch_edits_to_pdf(input_pdf_path, output_pdf_path, edits_list):
                 graphics=fitz.PDF_REDACT_LINE_ART_NONE
             )
         
-        # Save with maximum quality
+        # Save with compression
         print("💾 Saving PDF...")
         doc.save(
             output_pdf_path,
-            garbage=4,        # Remove unused objects
-            deflate=True,     # Compress
-            clean=True,       # Clean up
-            pretty=False      # Faster save
+            garbage=4,
+            deflate=True,
+            clean=True,
+            pretty=False
         )
         doc.close()
         
@@ -542,96 +527,6 @@ def agent_analyze_resume(user_query: str, resume_text: str) -> Dict[str, Any]:
         }
 
 
-# ============================================================================
-# ALTERNATIVE: Page Reconstruction Method (Most Accurate)
-# ============================================================================
-
-def apply_edits_with_page_reconstruction(input_pdf_path, output_pdf_path, edits_list):
-    """
-    ALTERNATIVE METHOD: Reconstruct entire page with edits applied.
-    Most accurate but slower - use if redaction method fails.
-    """
-    try:
-        doc = fitz.open(input_pdf_path)
-        
-        # Build edit map: {page_num: [(rect, original, new, font_data), ...]}
-        page_edits = {}
-        
-        for edit in edits_list:
-            original_text = edit['original']
-            new_text = edit['new']
-            
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                instances = page.search_for(original_text)
-                
-                if instances:
-                    if page_num not in page_edits:
-                        page_edits[page_num] = []
-                    
-                    for rect in instances:
-                        # Extract font data
-                        blocks = page.get_text("dict", clip=rect)["blocks"]
-                        font_size = 11
-                        
-                        for block in blocks:
-                            if block.get("type") == 0:
-                                for line in block.get("lines", []):
-                                    for span in line.get("spans", []):
-                                        size = span.get("size", 0)
-                                        if size > 0:
-                                            font_size = max(font_size, size)
-                        
-                        page_edits[page_num].append({
-                            'rect': rect,
-                            'original': original_text,
-                            'new': new_text,
-                            'font_size': font_size
-                        })
-                        break  # One per page
-                    break  # One per edit
-        
-        # Apply edits
-        for page_num, edits in page_edits.items():
-            page = doc[page_num]
-            
-            for edit in edits:
-                rect = edit['rect']
-                font_size = edit['font_size']
-                new_text = edit['new']
-                
-                # Calculate expansion
-                len_ratio = len(new_text) / max(len(edit['original']), 1)
-                if len_ratio > 1.1:
-                    extra_width = rect.width * (len_ratio - 1) * 0.6
-                    rect = fitz.Rect(rect.x0, rect.y0, rect.x1 + extra_width, rect.y1)
-                
-                # White out old text
-                page.draw_rect(rect, color=(1, 1, 1), fill=(1, 1, 1))
-                
-                # Insert new text
-                page.insert_textbox(
-                    rect,
-                    new_text,
-                    fontsize=font_size,
-                    fontname="helv",
-                    color=(0, 0, 0),
-                    align=fitz.TEXT_ALIGN_LEFT
-                )
-        
-        doc.save(output_pdf_path, garbage=4, deflate=True, clean=True)
-        doc.close()
-        
-        return True, len(edits_list)
-        
-    except Exception as e:
-        print(f"Page reconstruction error: {e}")
-        return False, 0
-
-
-# Update the export route to try both methods
-
-
 def extract_text_from_pdf(pdf_path):
     """Extract text from PDF"""
     with open(pdf_path, 'rb') as file:
@@ -681,7 +576,7 @@ def upload_file():
             
             splitted_text = text_splitter.split_text(resume_text)
             vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
-            vectorstore.save_local("vector_index")
+            # DON'T save to local - keep in memory only
             
             highlighted_suggestions = {}
             pending_edits = []  # Clear pending edits
@@ -731,23 +626,23 @@ def ask_query():
         if is_question and not is_improvement_request:
             print("Processing as Q&A query...")
             try:
-                db = FAISS.load_local("vector_index", embeddings, allow_dangerous_deserialization=True)
-                retriever = db.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+                if vectorstore is None:
+                    raise Exception("Vector store not initialized")
+                
+                retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+                docs = retriever.get_relevant_documents(query)
+                context = "\n\n".join([doc.page_content for doc in docs])
                 
                 qa_prompt = f"""Based on the following resume content, answer this question:
 
 Question: {query}
 
 Resume excerpt:
-{{context}}
+{context}
 
 Provide a clear, concise answer based only on the information in the resume."""
-
-                docs = retriever.get_relevant_documents(query)
-                context = "\n\n".join([doc.page_content for doc in docs])
                 
-                final_prompt = qa_prompt.replace("{context}", context)
-                answer = llm.invoke(final_prompt).content
+                answer = llm.invoke(qa_prompt).content
                 
                 return jsonify({
                     'response': answer,
@@ -840,10 +735,9 @@ def apply_suggestion():
         'type': suggestion.get('type', 'Edit')
     })
     
-    # Update vector store with new text
+    # Update vector store with new text (in memory only)
     splitted_text = text_splitter.split_text(new_text)
-    vectorstore = FAISS.from_texts(splitted_text, embeddings)
-    vectorstore.save_local("vector_index")
+    vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
     
     # Remove from highlighted suggestions
     del highlighted_suggestions[suggestion_id]
@@ -860,7 +754,7 @@ def apply_suggestion():
 
 @app.route('/get_pdf', methods=['GET'])
 def get_pdf():
-    """Always return original PDF (changes only applied on export)"""
+    """Return original PDF (changes only applied on export)"""
     global original_pdf_path
     if original_pdf_path and os.path.exists(original_pdf_path):
         return send_file(original_pdf_path, mimetype='application/pdf')
@@ -869,7 +763,7 @@ def get_pdf():
 
 @app.route('/export', methods=['POST'])
 def export_resume():
-    """Apply ALL pending edits in one batch and export - tries multiple methods"""
+    """Apply ALL pending edits in batch and export"""
     global original_pdf_path, pending_edits
     
     if not original_pdf_path or not os.path.exists(original_pdf_path):
@@ -892,18 +786,13 @@ def export_resume():
         print(f"🚀 EXPORTING WITH {len(pending_edits)} EDITS")
         print("="*80)
         
-        # METHOD 1: Try redaction method (most accurate font preservation)
-        print("\n📝 Method 1: Redaction-based replacement...")
+        # Try redaction method (most accurate)
+        print("\n📝 Applying edits...")
         success, count = apply_batch_edits_to_pdf(original_pdf_path, output_path, pending_edits)
         
         if not success:
-            # METHOD 2: Try page reconstruction as fallback
-            print("\n⚠️  Redaction failed, trying Method 2: Page reconstruction...")
-            success, count = apply_edits_with_page_reconstruction(original_pdf_path, output_path, pending_edits)
-        
-        if not success:
-            # METHOD 3: Create new PDF from text (last resort)
-            print("\n⚠️  Reconstruction failed, trying Method 3: Text-based PDF...")
+            # Fallback: Create from text
+            print("\n⚠️  PDF edit failed, creating from text...")
             create_pdf_from_text(current_resume_text, output_path)
             success = True
             count = len(pending_edits)
@@ -942,8 +831,7 @@ def reset_resume():
         
         # Update vector store
         splitted_text = text_splitter.split_text(original_resume_text)
-        vectorstore = FAISS.from_texts(splitted_text, embeddings)
-        vectorstore.save_local("vector_index")
+        vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
         
         return jsonify({
             'success': True,
@@ -965,5 +853,7 @@ def get_pending_edits():
 
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting server on port {port}...")
     from waitress import serve
-    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    serve(app, host="0.0.0.0", port=port, _quiet=True)
