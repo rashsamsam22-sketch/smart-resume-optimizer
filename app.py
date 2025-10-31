@@ -1,3 +1,4 @@
+from typing import Any, Dict
 from flask import Flask, request, render_template, jsonify, send_file
 import os
 from werkzeug.utils import secure_filename
@@ -9,24 +10,17 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.agents import Tool, AgentExecutor, create_react_agent
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_cerebras import ChatCerebras
 from flask_cors import CORS
 from dotenv import load_dotenv
+import fitz
 import json
-import base64
-from typing import List, Dict, Any
 import traceback
 from io import BytesIO
 import re
-import fitz  # PyMuPDF
-from PIL import Image
-import copy
 
 load_dotenv()
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
@@ -49,6 +43,18 @@ llm = ChatCerebras(
     temperature=0.3,
     max_tokens=2000
 )
+
+# Lazy load embeddings to save memory
+embeddings = None
+
+def get_embeddings():
+    global embeddings
+    if embeddings is None:
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'}
+        )
+    return embeddings
 
 print("Testing LLM connection...")
 try:
@@ -674,7 +680,7 @@ def upload_file():
             original_resume_text = resume_text  # Keep original
             
             splitted_text = text_splitter.split_text(resume_text)
-            vectorstore = FAISS.from_texts(splitted_text, embeddings)
+            vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
             vectorstore.save_local("vector_index")
             
             highlighted_suggestions = {}
@@ -959,13 +965,5 @@ def get_pending_edits():
 
 
 if __name__ == "__main__":
-    print("=" * 80)
-    print("AI Career Coach with Batch PDF Editing")
-    print("=" * 80)
-    print("Landing Page: http://localhost:5000/")
-    print("Chat Interface: http://localhost:5000/chat")
-    print("=" * 80)
-    
-    # Use Waitress for production
     from waitress import serve
     serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
