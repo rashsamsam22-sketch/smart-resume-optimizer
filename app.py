@@ -11,8 +11,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
 from langchain.text_splitter import CharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_cerebras import ChatCerebras
 from flask_cors import CORS
 from dotenv import load_dotenv
 import fitz
@@ -25,7 +23,7 @@ load_dotenv()
 CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
 
 # ============================================================================
-# AGENTIC AI SETUP
+# AGENTIC AI SETUP - LAZY LOADING
 # ============================================================================
 
 text_splitter = CharacterTextSplitter(
@@ -52,20 +50,29 @@ def get_embeddings():
         print("✅ Embeddings loaded")
     return embeddings
 
-# Initialize LLM with optimized settings
-llm = ChatCerebras(
-    api_key=CEREBRAS_API_KEY,
-    model="llama3.1-8b",
-    temperature=0.3,
-    max_tokens=800  # Reduced from 2000 to save memory
-)
+# LAZY LOAD LLM
+llm = None
 
-print("🔍 Testing LLM connection...")
-try:
-    test_response = llm.invoke("Hello, world!")
-    print(f"✅ LLM Test successful: {test_response.content[:50]}...")
-except Exception as e:
-    print(f"❌ LLM Test failed: {e}")
+def get_llm():
+    """Lazy load LLM to avoid startup timeout"""
+    global llm
+    if llm is None:
+        print("🤖 Initializing LLM (first request)...")
+        from langchain_cerebras import ChatCerebras
+        llm = ChatCerebras(
+            api_key=CEREBRAS_API_KEY,
+            model="llama3.1-8b",
+            temperature=0.3,
+            max_tokens=800
+        )
+        print("✅ LLM ready")
+    return llm
+
+# LAZY LOAD FAISS
+def get_faiss():
+    """Lazy import FAISS"""
+    from langchain_community.vectorstores import FAISS
+    return FAISS
 
 # Flask app setup
 app = Flask(__name__)
@@ -339,7 +346,7 @@ Return ONLY this JSON format:
 If no errors found, return: []
 """
         try:
-            result = llm.invoke(prompt).content.strip()
+            result = get_llm().invoke(prompt).content.strip()
             if result.startswith("```json"):
                 result = result[7:]
             elif result.startswith("```"):
@@ -383,7 +390,7 @@ Return ONLY this JSON:
 If nothing to improve, return: []
 """
         try:
-            result = llm.invoke(prompt).content.strip()
+            result = get_llm().invoke(prompt).content.strip()
             if result.startswith("```json"):
                 result = result[7:]
             elif result.startswith("```"):
@@ -427,7 +434,7 @@ Return ONLY this JSON:
 If nothing to improve, return: []
 """
         try:
-            result = llm.invoke(prompt).content.strip()
+            result = get_llm().invoke(prompt).content.strip()
             if result.startswith("```json"):
                 result = result[7:]
             elif result.startswith("```"):
@@ -551,6 +558,34 @@ def chat():
     return render_template('chat.html')
 
 
+@app.route('/health')
+def health():
+    """Simple health check for Render"""
+    return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/warmup')
+def warmup():
+    """Warm up the app by loading all models"""
+    try:
+        # Load embeddings
+        get_embeddings()
+        
+        # Load LLM and test it
+        test_llm = get_llm()
+        test_llm.invoke("test")
+        
+        return jsonify({
+            'status': 'warmed up',
+            'message': 'All models loaded successfully'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global current_resume_text, original_resume_text, vectorstore, original_pdf_path, highlighted_suggestions, pending_edits
@@ -575,6 +610,7 @@ def upload_file():
             original_resume_text = resume_text  # Keep original
             
             splitted_text = text_splitter.split_text(resume_text)
+            FAISS = get_faiss()
             vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
             # DON'T save to local - keep in memory only
             
@@ -642,7 +678,7 @@ Resume excerpt:
 
 Provide a clear, concise answer based only on the information in the resume."""
                 
-                answer = llm.invoke(qa_prompt).content
+                answer = get_llm().invoke(qa_prompt).content
                 
                 return jsonify({
                     'response': answer,
@@ -661,7 +697,7 @@ Resume:
 
 Provide a helpful answer based on the resume content."""
                 
-                answer = llm.invoke(fallback_prompt).content
+                answer = get_llm().invoke(fallback_prompt).content
                 return jsonify({
                     'response': answer,
                     'suggestions': [],
@@ -737,6 +773,7 @@ def apply_suggestion():
     
     # Update vector store with new text (in memory only)
     splitted_text = text_splitter.split_text(new_text)
+    FAISS = get_faiss()
     vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
     
     # Remove from highlighted suggestions
@@ -831,6 +868,7 @@ def reset_resume():
         
         # Update vector store
         splitted_text = text_splitter.split_text(original_resume_text)
+        FAISS = get_faiss()
         vectorstore = FAISS.from_texts(splitted_text, get_embeddings())
         
         return jsonify({
